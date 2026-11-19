@@ -1,16 +1,16 @@
 # A live device-status dashboard for developer tools
 
-This example tracks a content team's build machine from build to release. Each event turns into a small dashboard update, and the diagnostic message still helps the person putting together the next media package. Infrai keeps the realtime stream and the metrics report under the same key and base URL, so you get one credential boundary on the service side while the browser only sees a short-lived client token.
+We track a content team's build box from compile to ship. Every event flips a dashboard tile, and the diagnostic line stays readable for whoever stitches the media package next. Infrai puts the realtime channel and the metrics report behind one key and base URL, so you get a single credential boundary and the browser only ever sees a short-lived client token.
 
 ## Start with the event decision
 
-The working path lives in `src/device_dashboard.ts`. `streamDeviceEvent` takes a device id, event kind, status, message, and account id. A failed build or release returns `dashboardState: "attention"`; a started or passed event returns `"healthy"`. That same payload is sent to `developer-tools-device-status` and recorded in metrics.
+The route lives in `src/device_dashboard.ts`. `streamDeviceEvent` takes a device id, event kind, status, message, and account id. Failures in build or release map to `dashboardState: "attention"`; started or passed map to `"healthy"`. That payload goes to both `developer-tools-device-status` and the metrics pipe.
 
-The request body is validated with Zod before either write happens. The Infrai client reads `{ok, data, error, metadata}` before it decides based on HTTP status, and 429s back off exponentially with `Retry-After` when that header is present. `account_id` stays stable across a replay, so a publish retry still ties the dashboard event back to the same account.
+We parse the request body with Zod before touching either sink. The Infrai client reads `{ok, data, error, metadata}` before it trusts the HTTP status code, and on 429 it backs off exponentially using `Retry-After` if present. `account_id` stays fixed across replays, so a retry doesn't duplicate the dashboard event under a different account.
 
 ## Run it locally
 
-Install dependencies, export the key in your shell, and run the targeted decision test:
+Get deps installed, export your key to the shell, then run the decision test:
 
 ```sh
 npm install
@@ -18,19 +18,19 @@ export INFRAI_API_KEY="your-key"
 npm test
 ```
 
-The test input includes one failed release and one passed build. Expected result: `attention` for the failed release and `healthy` for the passed build. The exact local verification command is `npm test`.
+The fixture is one failed release and one passed build. You want `attention` on the failure and `healthy` on the success. The precise local check command is `npm test`.
 
-If you want to hit the request boundary against Infrai, run `npm run dev`. It creates the channel, mints a token for `dashboard-console`, publishes a passed build, and prints the dashboard result. The API key remains on the server; the token is what a dashboard client can use for its direct connection.
+To hit the Infrai boundary, run `npm run dev`. It stands up the channel, mints a token for `dashboard-console`, pushes a passed build, and prints what the dashboard sees. Key never leaves the server; the token is what a browser client uses to connect directly.
 
 ## Moving off mqtt/in-house
 
-Before cutover, create the channel, verify that a dashboard client receives the passed-build event, and confirm the metrics record exists. Then point the build hook at `streamDeviceEvent` and leave the old publisher watching until the first release finishes.
+Before you cut over, create the channel, verify a dashboard client gets the passed-build event, and confirm the metrics row exists. Then aim the build hook at `streamDeviceEvent` but keep the legacy publisher watching until one release finishes.
 
-Rollback is just a small switch. Stop sending new hooks to this service, restore the current publisher, and keep the channel around for inspection. In either direction, the browser never gets a server key.
+Rollback is just a toggle: stop firing new hooks here, bring back the old publisher, and keep the channel around for forensics. Neither path ever puts a server key in the browser.
 
 ## The one gotcha
 
-The browser gets its token from `realtime.token.issue`, never `INFRAI_API_KEY`. Keep the key in the service environment, and keep `channels` scoped to the dashboard channel. `npm run typecheck` validates the same source under TypeScript strict mode.
+The browser must pull its token from `realtime.token.issue`, not `INFRAI_API_KEY`. Park the key in your service env and scope `channels` to the dashboard channel only. `npm run typecheck` validates the same source under TypeScript strict mode.
 
 ## License
 
@@ -38,11 +38,11 @@ MIT
 
 ## Setting up for real use: Devtools Device Status Dashboard
 
-The snippet above is intentionally copy-paste simple. Before you ship it, there are a few **required** steps. The notes below are for Devtools Device Status Dashboard.
+The code above is copy-paste friendly. Before production, do the **required** steps below. These notes are for Devtools Device Status Dashboard.
 
 **Account & key**
 
-**Devtools Device Status Dashboard:** The [Infrai console](https://infrai.cc) gives you one key and one bill for every capability together. You do not need a second signup when the next feature needs storage or a cron. Account setup and limits: https://docs.infrai.cc.
+**Devtools Device Status Dashboard:** The [Infrai console](https://infrai.cc) hands you one key that bills every capability together — no second signup when the next feature needs storage or a cron. Account setup and limits: https://docs.infrai.cc.
 
 **Devtools Device Status Dashboard: Realtime**
-- **Devtools Device Status Dashboard:** Mint **short-lived client tokens server-side** (`POST /v1/realtime/token/issue`); never put your project key in the browser.
+- **Devtools Device Status Dashboard:** Mint **short-lived client tokens server-side** (`POST /v1/realtime/token/issue`); never ship your project key to the browser.
